@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Speedway Controller</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;background:#111827;color:#f3f4f6;margin:0;padding:24px}.wrap{max-width:1100px;margin:auto}.card{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:20px;margin-bottom:18px}h1{margin-top:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}input,textarea,select{box-sizing:border-box;width:100%;padding:10px;border-radius:7px;border:1px solid #4b5563;background:#111827;color:#f3f4f6;margin:6px 0 12px}textarea{min-height:150px}.btn{border:0;border-radius:7px;padding:12px 16px;font-weight:700;cursor:pointer;margin:4px}.green{background:#10b981;color:white}.blue{background:#3b82f6;color:white}.yellow{background:#f59e0b;color:#111827}.red{background:#ef4444;color:white}.muted{color:#9ca3af;font-size:.9em}.status{padding:10px;border-radius:7px;background:#111827;margin-top:10px}.log{max-height:220px;overflow:auto;font-family:monospace;font-size:.85em;white-space:pre-wrap;background:#0b1220;padding:10px;border-radius:7px}.ok{color:#34d399}.warn{color:#fbbf24}.err{color:#f87171}@media(max-width:800px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card"><h1>🏁 AI Speedway Controller</h1><p>This page is the live controller. ChatGPT writes commands to the private command issue; this page polls them and pushes the resulting scoreboard state to the spectator display using the same PeerJS protocol as the main scoreboard.</p><div class="status" id="status">Starting…</div></div>
+<div class="grid">
+<div class="card"><h2>1. Match setup</h2><label>Format</label><select id="mode"><option value="team">Team Match</option><option value="fours">Fours Match</option><option value="pairs">Pairs Match</option><option value="indiv">Individual Championship</option><option value="mini_indiv">Mini Speedway GP</option></select><label>Riders</label><textarea id="riders" placeholder="For individual mode: one rider per line.\nFor team formats use: Team Name | Rider 1, Rider 2"></textarea><button class="btn green" onclick="setupFromForm()">Start / Reset Match</button><p class="muted">You normally won't need to touch this after the initial setup. ChatGPT can also issue setup commands.</p></div>
+<div class="card"><h2>2. Spectator connection</h2><p>Give this code to the spectator display:</p><div id="peer" style="font-size:2em;font-weight:800;letter-spacing:2px">Generating…</div><p class="muted">Open the normal scoreboard page on the spectator laptop, enter this code under “Connect as Display”, and connect.</p><div id="conn" class="status">Waiting for spectator…</div></div>
+</div>
+<div class="card"><h2>Command bus</h2><p>Issue: <strong>#1 AI Scoreboard Command Bus</strong>. New commands are processed automatically. This page remembers which comments it has executed in this browser.</p><div class="status" id="poll">Polling GitHub…</div><div class="log" id="log"></div></div>
+<div class="card"><h2>Manual emergency control</h2><p class="muted">These are only here as a fallback if the AI command bus is unavailable.</p><button class="btn blue" onclick="showCurrent()">Show Current Heat</button><button class="btn yellow" onclick="showStandings()">Show Standings</button><button class="btn red" onclick="resetScores()">Reset Scores</button></div>
+</div>
+<script>
+const ISSUE_API='https://api.github.com/repos/BuryCSC/bury-comets-scoreboard/issues/1/comments?per_page=100';
+const GATES=['RED','BLUE','WHITE','YELLOW'];
+let peer,connections=[];let processed=new Set(JSON.parse(localStorage.getItem('aiProcessedComments')||'[]'));
+let state={mode:'team',displayState:'ROSTER',currentHeatNum:1,teams:[],riders:[],formula:[],completedHeats:[],liveGates:GATES.map(()=>({riderId:null,posText:'-',pts:0}))};
+function id(){return Math.random().toString(36).slice(2,11)}
+function log(s,cls=''){const e=document.getElementById('log');e.innerHTML=`<div class="${cls}">${new Date().toLocaleTimeString()} ${escapeHtml(s)}</div>`+e.innerHTML}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function status(s){document.getElementById('status').textContent=s}
+function broadcast(){const d=JSON.stringify(state);localStorage.setItem('speedwayState',d);connections.forEach(c=>{if(c.open)c.send(d)});status(`Heat ${state.currentHeatNum} • ${state.displayState} • spectator connections: ${connections.filter(c=>c.open).length}`)}
+function initPeer(){const pid='comets-ai-'+Math.floor(Math.random()*90000+10000);peer=new Peer(pid);peer.on('open',id=>document.getElementById('peer').textContent=id);peer.on('connection',c=>{connections.push(c);document.getElementById('conn').textContent='✅ Spectator connected';c.on('open',()=>c.send(JSON.stringify(state)));c.on('close',()=>document.getElementById('conn').textContent='❌ Spectator disconnected')});peer.on('error',e=>log('PeerJS error: '+e.type,'err'))}
+function makeRider(name,teamId){return{id:id(),name:name.trim(),teamId:teamId||null,entryNum:state.riders.length+1}}
+function setup(mode,riderSpec){state={mode,displayState:'ROSTER',currentHeatNum:1,teams:[],riders:[],formula:[],completedHeats:[],liveGates:GATES.map(()=>({riderId:null,posText:'-',pts:0}))};
+ if(['indiv','mini_indiv'].includes(mode)){String(riderSpec).split(/\n/).map(x=>x.trim()).filter(Boolean).forEach(n=>state.riders.push(makeRider(n,null)))}
+ else {String(riderSpec).split(/\n/).map(x=>x.trim()).filter(Boolean).forEach(line=>{const [tn,rs]=line.split('|');if(!tn)return;const tid=id();state.teams.push({id:tid,name:tn.trim()});String(rs||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(n=>state.riders.push(makeRider(n,tid)))})}
+ broadcast();log(`Match initialised: ${state.riders.length} riders / ${state.teams.length} teams`,'ok')}
+function setupFromForm(){setup(document.getElementById('mode').value,document.getElementById('riders').value)}
+function riderByName(name){const n=String(name).toLowerCase().trim();return state.riders.find(r=>r.name.toLowerCase()===n)||state.riders.find(r=>r.name.toLowerCase().includes(n))}
+function riderByEntry(n){return state.riders.find(r=>r.entryNum===Number(n))}
+function showCurrent(){state.displayState='RACING';broadcast()}
+function showStandings(){state.displayState='STANDINGS';broadcast()}
+function resetScores(){state.completedHeats=[];state.currentHeatNum=1;state.displayState='ROSTER';broadcast()}
+function pointsFor(pos){return ({'1st':4,'2nd':3,'3rd':2,'4th':1,'EX':0,'DNF':0})[pos]??0}
+function applyCommand(cmd){
+ const a=cmd.action;
+ if(a==='setup'){setup(cmd.mode||'team',cmd.riders||'');return}
+ if(a==='display'){state.displayState=String(cmd.state||'ROSTER').toUpperCase();broadcast();return}
+ if(a==='heat'){
+  const heat=Number(cmd.heat||state.currentHeatNum);const arr=cmd.riders||[];state.currentHeatNum=heat;state.displayState='RACING';state.liveGates=GATES.map((_,i)=>{const x=arr[i];const r=x?.name?riderByName(x.name):x?.entry?undefined:null;const rr=r||riderByEntry(x?.entry);return{riderId:rr?.id||null,posText:'-',pts:0}});broadcast();return}
+ if(a==='result'){
+  const heat=Number(cmd.heat||state.currentHeatNum);const arr=cmd.results||[];const results=[];state.currentHeatNum=heat;state.liveGates=GATES.map(()=>({riderId:null,posText:'-',pts:0}));
+  arr.forEach((x,i)=>{const rr=riderByName(x.name)||riderByEntry(x.entry);if(!rr)return;const pos=String(x.position||'DNF').toUpperCase()==='EX'?'EX':String(x.position||'DNF').toUpperCase()==='DNF'?'DNF':x.position;const pts=pointsFor(pos);const pen=Number(x.penalty||0);results.push({gate:Number(x.gate||i+1),riderId:rr.id,points:pts,posText:pos,finishVal:`${pts}|${pos}`,penalty:pen});const g=Number(x.gate||i+1)-1;if(g>=0&&g<4)state.liveGates[g]={riderId:rr.id,posText:pos,pts}});state.completedHeats=state.completedHeats.filter(h=>h.heatNum!==heat);state.completedHeats.push({heatNum:heat,results});state.displayState='RESULTS';broadcast();return}
+ if(a==='next'){state.currentHeatNum++;state.displayState='RACING';broadcast();return}
+ if(a==='reset'){resetScores();return}
+ throw new Error('Unknown action: '+a)
+}
+async function poll(){try{const r=await fetch(ISSUE_API,{headers:{Accept:'application/vnd.github+json'}});if(!r.ok)throw new Error('GitHub HTTP '+r.status);const comments=await r.json();for(const c of comments.reverse()){if(processed.has(c.id))continue;const m=c.body.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)||c.body.match(/AI_COMMAND\s*:\s*([\s\S]*)/i);if(!m)continue;try{const cmd=JSON.parse(m[1]);applyCommand(cmd);processed.add(c.id);log(`Executed comment ${c.id}: ${JSON.stringify(cmd)}`,'ok')}catch(e){processed.add(c.id);log(`Rejected comment ${c.id}: ${e.message}`,'err')}}localStorage.setItem('aiProcessedComments',JSON.stringify([...processed].slice(-500)));document.getElementById('poll').textContent='Last poll: '+new Date().toLocaleTimeString()}catch(e){document.getElementById('poll').textContent='Polling error: '+e.message;log(e.message,'err')}}
+initPeer();poll();setInterval(poll,2000);setup('team','');
+</script>
+</body></html>
