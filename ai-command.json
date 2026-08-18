@@ -1,8 +1,8 @@
 {
-  "id": 5332741844,
-  "updatedAt": "2026-08-18T19:02:22Z",
+  "id": 5332762460,
+  "updatedAt": "2026-08-18T19:04:20Z",
   "command": {
-    "action": "display",
-    "state": "ROSTER"
+    "action": "heat",
+    "heat": 2
   }
 }
