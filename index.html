@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Speedway Controller</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+    <style>
+        /* --- GLOBAL VARIABLES & THEME --- */
+        :root {
+            --primary: #e74c3c;
+            --secondary: #f1c40f;
+            --bg-dark: #0a0a0c;
+            --bg-panel: #16161a;
+            --text-light: #ecf0f1;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #e2e8f0; color: #333; }
+        .hidden { display: none !important; }
+        
+        /* --- ANIMATIONS & TRANSITIONS --- */
+        .fade-slide-in { animation: fadeSlideIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeSlideIn { 0% { opacity: 0; transform: translateY(30px); } 100% { opacity: 1; transform: translateY(0); } }
+        
+        .flip-in { animation: flipIn 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes flipIn { 0% { opacity: 0; transform: rotateX(-90deg); } 100% { opacity: 1; transform: rotateX(0); } }
+
+        /* --- CONTROL PANEL STYLING --- */
+        #control-ui { max-width: 1000px; margin: 20px auto; }
+        .panel { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-bottom: 20px; transition: border-color 0.3s; }
+        h1, h2 { color: #1a202c; margin-top: 0; }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        
+        label { display: block; font-weight: bold; font-size: 0.9em; margin-bottom: 5px; color: #4a5568; }
+        input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 1em; box-sizing: border-box; }
+        textarea { resize: vertical; min-height: 80px; }
+        
+        .btn { display: block; width: 100%; padding: 12px; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: all 0.2s; text-align: center; margin-bottom: 10px;}
+        .btn-blue { background-color: #3182ce; } .btn-blue:hover { background-color: #2b6cb0; }
+        .btn-green { background-color: #38a169; } .btn-green:hover { background-color: #2f855a; }
+        .btn-yellow { background-color: var(--secondary); color: #000; } .btn-yellow:hover { filter: brightness(0.9); }
+        .btn-red { background-color: #e53e3e; } .btn-red:hover { background-color: #c53030; }
+        .btn-purple { background-color: #805ad5; } .btn-purple:hover { background-color: #6b46c1; }
+        .btn-gray { background-color: #718096; } .btn-gray:hover { background-color: #4a5568; }
+        .btn-outline { background-color: transparent; border: 2px dashed #cbd5e0; color: #4a5568; } .btn-outline:hover { background-color: #edf2f7; }
+
+        .gate-card { background: #f7fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; border-top: 5px solid var(--primary); }
+        .gate-title { font-weight: bold; margin-bottom: 10px; color: #2d3748; }
+        
+        .finish-group { display: flex; gap: 5px; margin-bottom: 15px; }
+        .f-btn { flex: 1; padding: 10px 0; border: 1px solid #cbd5e0; background: #edf2f7; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.8em; transition: 0.1s; color: #4a5568;}
+        .f-btn:hover { background: #e2e8f0; }
+        .f-btn.active-1st { background: #3182ce; color: white; border-color: #2b6cb0; }
+        .f-btn.active-2nd { background: #38a169; color: white; border-color: #2f855a; }
+        .f-btn.active-3rd { background: #d69e2e; color: white; border-color: #b7791f; }
+        .f-btn.active-4th { background: #e53e3e; color: white; border-color: #c53030; }
+        .f-btn.active-EX, .f-btn.active-DNF { background: #718096; color: white; border-color: #4a5568; }
+        
+        .pen-btn { width: 100%; padding: 8px; border: 2px dashed #fc8181; background: transparent; color: #e53e3e; font-weight: bold; border-radius: 4px; cursor: pointer; transition: 0.2s;}
+        .pen-btn.active { background: #fc8181; color: white; border-style: solid; }
+
+        .preview-container { width: 426px; height: 240px; background: #000; border-radius: 8px; overflow: hidden; border: 4px solid #2d3748; margin: 0 auto 20px auto; position: relative; }
+        #display-preview { width: 1280px; height: 720px; border: none; transform: scale(0.3333); transform-origin: top left; pointer-events: none; }
+        .preview-label { position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 8px; font-size: 12px; border-radius: 4px; z-index: 10; font-weight: bold;}
+        .team-setup-card { background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px; }
+
+        #report-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 100; display: flex; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 600px; max-width: 90%; }
+
+        .sch-heat-row-setup { background: white; border: 1px solid #cbd5e0; border-radius: 6px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
+        .sch-select { font-size: 0.85em; padding: 6px; }
+        
+        /* --- SPECTATOR DISPLAY STYLING --- */
+        #spectator-display { display: none; width: 100vw; height: 100vh; background-color: var(--bg-dark); color: var(--text-light); overflow: hidden; font-family: 'Arial Black', Impact, sans-serif; }
+        
+        .layout-split { display: grid; grid-template-columns: 26% 74%; height: 100%; }
+        .layout-full { width: 100vw; height: 100vh; padding: 3vh 4vw; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; background: radial-gradient(circle at center, #1a1a24 0%, #0a0a0c 100%); overflow: hidden; }
+        
+        .sidebar { background: var(--bg-panel); border-right: 4px solid var(--primary); display: flex; flex-direction: column; box-shadow: 10px 0 30px rgba(0,0,0,0.5); z-index: 10; position: relative;}
+        .brand-header { padding: 15px; text-align: center; border-bottom: 2px solid #333; background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0c 100%);}
+        .dynamic-logo { max-width: 140px; filter: drop-shadow(0px 5px 10px rgba(0,0,0,0.5)); transition: opacity 0.3s; }
+        .dynamic-logo-full { height: 12vh; margin-bottom: 2vh; filter: drop-shadow(0px 5px 10px rgba(0,0,0,0.5)); }
+        
+        /* Adjusted Sidebar List to securely fit up to 16 riders */
+        .lb-section { padding: 10px 15px; flex: 1; display: flex; flex-direction: column; overflow: hidden;}
+        .lb-title { font-size: 1.2vw; color: var(--secondary); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 2px; text-align: center; border-bottom: 1px dashed #444; padding-bottom: 5px;}
+        .lb-list { display: flex; flex-direction: column; gap: 4px; overflow: hidden; padding-right: 5px;}
+        .lb-item { display: flex; justify-content: space-between; background: rgba(255,255,255,0.05); padding: 5px 10px; border-radius: 4px; font-size: 0.95vw; border-left: 4px solid #555; align-items: center; }
+        .lb-score { color: var(--secondary); font-size: 1.1vw; font-weight: bold;}
+        
+        .heat-container { display: flex; flex-direction: column; padding: 30px; position: relative; background: radial-gradient(circle at center, #1a1a24 0%, #0a0a0c 100%);}
+        .heat-header { text-align: center; margin-bottom: 30px; }
+        .heat-badge { display: inline-block; background: var(--primary); color: white; padding: 5px 20px; font-size: 1.2vw; text-transform: uppercase; letter-spacing: 4px; clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%); margin-bottom: 10px; }
+        .heat-title { font-size: 4.5vw; line-height: 1; color: white; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 5px 15px rgba(0,0,0,0.8);}
+        .heat-status { font-size: 1.5vw; color: var(--secondary); letter-spacing: 5px; text-transform: uppercase; margin-top: 10px; min-height: 2vw;}
+        
+        .gates-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; width: 95%; margin: 0 auto; }
+        .disp-gate { background: rgba(255,255,255,0.03); border-radius: 8px; display: flex; flex-direction: column; border: 1px solid #333; position: relative; overflow: hidden; transition: transform 0.3s; }
+        .disp-gate::before { content: ''; position: absolute; top: 0; left: 0; width: 6px; height: 100%; background: #555; }
+        
+        .disp-gate.g1::before { background: #e74c3c; }
+        .disp-gate.g2::before { background: #3498db; }
+        .disp-gate.g3::before { background: #ecf0f1; }
+        .disp-gate.g4::before { background: #f1c40f; }
+        
+        .disp-rider-info { padding: 25px 15px; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center;}
+        
+        .disp-gate-num { font-family: 'Segoe UI', sans-serif; font-size: 1.1vw; color: #888; margin-bottom: 10px; letter-spacing: 2px; min-height: 1.5vw;}
+        .gate-badge { display: inline-block; padding: 4px 15px; border-radius: 4px; font-weight: bold; font-size: 1.2vw; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.5); margin: 0 auto 10px auto; }
+        .gate-badge-red { background-color: #e74c3c; color: white; }
+        .gate-badge-blue { background-color: #3498db; color: white; }
+        .gate-badge-white { background-color: #ecf0f1; color: black; }
+        .gate-badge-yellow { background-color: #f1c40f; color: black; }
+
+        .disp-rider-name { font-size: 2.8vw; margin-bottom: 5px; text-transform: uppercase; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); }
+        .disp-rider-team { font-family: 'Segoe UI', sans-serif; font-size: 1.1vw; color: #aaa; text-transform: uppercase; letter-spacing: 1px; min-height: 1.5vw; }
+        
+        .disp-result-overlay { display: none; border-top: 1px solid #333; background: rgba(0,0,0,0.6); }
+        .disp-gate.show-results .disp-result-overlay { display: flex; }
+        .disp-gate.winner { border-color: var(--secondary); box-shadow: 0 0 30px rgba(241, 196, 15, 0.2); transform: scale(1.02); z-index: 5;}
+        
+        .score-box { flex: 1; padding: 12px; text-align: center; border-right: 1px solid #333; }
+        .score-box:last-child { border-right: none; }
+        .score-label { font-family: 'Segoe UI', sans-serif; font-size: 0.8vw; color: #888; display: block; margin-bottom: 5px; }
+        .score-val { font-size: 2.5vw; color: white; }
+        .score-val.pos-text { color: var(--primary); }
+        .score-val.total { color: var(--secondary); }
+
+        .full-title { font-size: 4vh; color: var(--secondary); text-transform: uppercase; margin-bottom: 2vh; border-bottom: 2px solid #333; padding-bottom: 1vh; width: 100%; text-align: center; flex-shrink: 0;}
+        .full-container { width: 100%; display: flex; gap: 2vw; justify-content: center; align-items: stretch; flex: 1; overflow: hidden;}
+        
+        .card-group { background: rgba(255,255,255,0.05); padding: 2vh 2vw; border-radius: 8px; border-top: 4px solid var(--primary); display: flex; flex-direction: column; width: 100%;}
+        .card-title { font-size: 2.5vh; color: white; margin-bottom: 1.5vh; text-align: center; text-transform: uppercase; border-bottom: 1px solid #444; padding-bottom: 1vh;}
+        
+        .multi-col-grid { display: grid; column-gap: 3vw; row-gap: 0.5vh; width: 100%; align-content: start; }
+        .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        
+        .card-row { display: flex; justify-content: space-between; font-size: 2.4vh; border-bottom: 1px dashed #333; padding: 1vh 0; align-items: center;}
+        .card-row-name { color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center;}
+        .card-row-score { color: var(--primary); font-weight: bold; padding-left: 1vw; font-size: 2.6vh;}
+
+        .schedule-grid-container { display: grid; gap: 1.5vw; width: 100%; align-content: start; }
+        .schedule-heat-row { background: rgba(255,255,255,0.05); padding: 1.5vh 2vw; border-left: 6px solid var(--primary); border-radius: 0 8px 8px 0; display: flex; align-items: center; box-sizing: border-box; width: 100%; transition: opacity 0.3s; }
+        .schedule-num { font-size: 2.2vh; font-weight: bold; color: var(--secondary); width: 22%; letter-spacing: 2px; display: flex; flex-direction: column; justify-content: center; }
+        .schedule-riders { display: flex; width: 78%; justify-content: space-between; }
+        .sch-r { font-size: 1.8vh; text-transform: uppercase; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+        .sch-pts { background: rgba(255,255,255,0.1); color: white; font-size: 1.4vh; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; }
+        
+        .heat-completed { opacity: 0.5; filter: grayscale(30%); border-left-color: #555 !important; }
+        .heat-completed .schedule-num { color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <!-- ==========================================
+         SETUP PHASE (Control Panel)
+    =========================================== -->
+    <div id="setup-view" class="control-view">
+        <div id="control-ui">
+            
+            <div class="panel" style="background: #e6fffa; border: 1px solid #319795; margin-bottom: 20px;">
+                <h2 style="margin-top:0; color: #234e52;">🌐 Remote Screen Connection (Internet)</h2>
+                <div class="grid-2">
+                    <div>
+                        <p style="margin-top:0; font-size:0.9em; color:#4a5568;"><strong>ANNOUNCER LAPTOP:</strong><br>If using a separate internet-connected laptop for the big screen, give it this exact code:</p>
+                        <div style="font-size: 2em; font-weight: bold; color: #2b6cb0; letter-spacing: 2px;" id="my-peer-code">Generating...</div>
+                        <p style="font-size:0.8em; color:#718096; font-weight: bold;" id="peer-status">Waiting for connection...</p>
+                    </div>
+                    <div style="border-left: 1px solid #cbd5e0; padding-left: 20px;">
+                        <p style="margin-top:0; font-size:0.9em; color:#4a5568;"><strong>SPECTATOR LAPTOP:</strong><br>Enter the code from the announcer's laptop to sync up instantly.</p>
+                        <input type="text" id="remote-code-input" placeholder="e.g. comets-12345" style="text-transform: lowercase; margin-bottom: 10px; font-size: 1.2em;">
+                        <button class="btn btn-green" onclick="connectAsRemote()">🔗 Connect as Display</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel" id="setup-main-panel">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="348493327_203936199154311_6160881155196360915_n.jpg" alt="Logo" class="dynamic-logo" style="height: 80px; border-radius: 8px;">
+                    <h1>Match Setup</h1>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 25px; padding: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <button class="btn btn-gray" style="margin:0;" onclick="saveSetup()">💾 Save Current Setup</button>
+                    <button class="btn btn-purple" style="margin:0;" onclick="loadSetup()">📂 Load Saved Setup</button>
+                </div>
+                
+                <label>Match Format & Branding</label>
+                <select id="setup-mode" onchange="toggleSetupMode()" style="margin-bottom: 20px; font-weight: bold; font-size: 1.1em; border: 2px solid #cbd5e0;">
+                    <option value="team">Bury CSC - Team Match (Standard)</option>
+                    <option value="fours">Bury CSC - Fours Match (Team format, individual racing)</option>
+                    <option value="pairs">Bury CSC - Pairs Match (2 Riders per team)</option>
+                    <option value="indiv">Bury CSC - Individual Championship</option>
+                    <option value="mini_indiv">Mini Speedway GP - Individual Championship</option>
+                </select>
+
+                <div id="setup-teams-container">
+                    <div id="dynamic-teams-list"></div>
+                    <button class="btn btn-outline" onclick="addTeamInput()">+ Add Another Team/Pair</button>
+                </div>
+
+                <div id="setup-indiv-container" class="hidden">
+                    <label>Enter All Riders (One per line)</label>
+                    <textarea id="setup-indiv-riders" style="min-height: 200px;" placeholder="Rider 1\nRider 2..."></textarea>
+                </div>
+
+                <div style="background: #edf2f7; padding: 20px; border: 1px solid #cbd5e0; border-radius: 8px; margin-top: 25px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                        <div>
+                            <label style="font-size: 1.2em;">Pre-programmed Race Schedule (Optional)</label>
+                            <p style="font-size: 0.85em; color: #4a5568; margin-top: 0;">Build your heat formulas using the dropdowns below.</p>
+                        </div>
+                        <button class="btn btn-gray" style="width: auto; margin: 0; padding: 8px 15px;" onclick="refreshScheduleDropdowns()">🔄 Load Riders into Builder</button>
+                    </div>
+                    
+                    <div id="schedule-builder-container"></div>
+                    
+                    <button class="btn btn-blue" style="margin-top: 15px;" onclick="addScheduleHeat()">+ Add Heat to Schedule</button>
+                </div>
+                
+                <hr style="margin: 30px 0; border: 0; border-top: 1px solid #e2e8f0;">
+                <button class="btn btn-green" style="padding: 15px; font-size: 1.3em;" onclick="startMatch()">Start Match ➔</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         MATCH OPERATION PHASE (Control Panel)
+    =========================================== -->
+    <div id="match-view" class="control-view hidden">
+        <div id="control-ui">
+            <div class="panel" style="background-color: #fdf2f2; border: 1px solid #fc8181; display: flex; justify-content: space-between; align-items: center; padding: 15px 25px;">
+                <h2 style="margin: 0; font-size: 1.2em;">Match Controller</h2>
+                <button class="btn btn-red" style="width: auto; margin: 0; padding: 10px 20px; font-size: 0.9em;" onclick="resetMatch()">⚠️ Abort Match & Return to Setup</button>
+            </div>
+
+            <div class="grid-2">
+                <div class="panel" style="text-align: center;">
+                    <h2 style="font-size: 1.2em;">Live Display Status</h2>
+                    <div class="preview-container">
+                        <div class="preview-label" id="ctrl-status-badge">Loading...</div>
+                        <iframe id="display-preview" src=""></iframe>
+                    </div>
+                    <button class="btn btn-outline" onclick="openDisplayWindow()">📺 Pop Out Main Spectator Display</button>
+                </div>
+
+                <div class="panel">
+                    <h2 style="font-size: 1.2em;">Heat Actions</h2>
+                    
+                    <div style="display: flex; justify-content: space-between; background: #edf2f7; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #cbd5e0;">
+                        <button class="btn btn-gray" style="width: auto; margin: 0; padding: 10px 15px; font-size: 0.9em;" onclick="changeHeat(-1)">⬅️ Previous Heat</button>
+                        <div style="text-align: center; display: flex; flex-direction: column; justify-content: center;">
+                            <label style="margin:0; font-size: 0.8em; color: #4a5568;">Current Heat</label>
+                            <input type="number" id="ctrl-heatNum" value="1" style="width: 80px; font-size: 1.4em; text-align: center; margin: 0 auto; border: 2px solid var(--primary); font-weight: bold;" onchange="loadHeat(this.value)">
+                        </div>
+                        <button class="btn btn-gray" style="width: auto; margin: 0; padding: 10px 15px; font-size: 0.9em;" onclick="changeHeat(1)">Next Heat ➡️</button>
+                    </div>
+
+                    <button class="btn btn-blue" style="padding: 15px;" onclick="pushMatchup()">
+                        1. Show Riders on Display
+                    </button>
+                    <button class="btn btn-yellow" style="padding: 15px; color: #1a202c;" onclick="commitAndShowResults()">
+                        2. Commit Scores & Show Results
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="panel" style="background: #ebf4ff; border: 1px solid #bee3f8; height: 100%; box-sizing: border-box;">
+                    <h2 style="font-size: 1.2em; margin-bottom: 15px;">Global Display Overrides</h2>
+                    <div class="grid-3">
+                        <button class="btn btn-purple" style="margin:0; font-size: 0.9em;" onclick="updateDisplayState('ROSTER')">📋 Roster</button>
+                        <button class="btn btn-purple" style="margin:0; font-size: 0.9em;" onclick="updateDisplayState('SCHEDULE')">📅 Schedule</button>
+                        <button class="btn btn-purple" style="margin:0; font-size: 0.9em;" onclick="updateDisplayState('STANDINGS')">🏆 Standings</button>
+                    </div>
+                    <p style="font-size: 0.85em; color: #4a5568; text-align: center; margin-top: 10px;">Return to race by pressing "1. Show Riders on Display".</p>
+                </div>
+
+                <div class="panel" style="background: #e6fffa; border: 1px solid #319795; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center;">
+                    <h2 style="font-size: 1.2em; margin-bottom: 15px; text-align: center;">Match Completion</h2>
+                    <button class="btn btn-green" style="font-size: 1.2em; padding: 15px; margin: 0;" onclick="finishMatchAndReport()">
+                        🏁 End Match & Generate Report
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Rider Inputs</h2>
+                <div class="grid-4">
+                    <script>
+                        for(let i=1; i<=4; i++) {
+                            document.write(`
+                            <div class="gate-card">
+                                <div class="gate-title" id="ctrl-g${i}-title">Input ${i}</div>
+                                <label>Rider</label>
+                                <select id="ctrl-g${i}-rider" style="margin-bottom: 15px;">
+                                    <option value="">-- Empty --</option>
+                                </select>
+                                
+                                <label>Finish Position</label>
+                                <div class="finish-group" id="gate-group-${i}">
+                                    <button type="button" class="f-btn" data-val="4|1st" onclick="setFinish(${i}, '4|1st')">1st</button>
+                                    <button type="button" class="f-btn" data-val="3|2nd" onclick="setFinish(${i}, '3|2nd')">2nd</button>
+                                    <button type="button" class="f-btn" data-val="2|3rd" onclick="setFinish(${i}, '2|3rd')">3rd</button>
+                                    <button type="button" class="f-btn" data-val="1|4th" onclick="setFinish(${i}, '1|4th')">4th</button>
+                                    <button type="button" class="f-btn" data-val="0|EX" onclick="setFinish(${i}, '0|EX')">EX</button>
+                                    <button type="button" class="f-btn" data-val="0|DNF" onclick="setFinish(${i}, '0|DNF')">DNF</button>
+                                </div>
+
+                                <button type="button" class="pen-btn" id="ctrl-g${i}-pen" onclick="togglePenalty(${i})">⚠️ Add Tapes Penalty (-1 Pt)</button>
+                            </div>
+                            `);
+                        }
+                    </script>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- REPORT GENERATOR MODAL -->
+    <div id="report-modal" class="hidden">
+        <div class="modal-content">
+            <h2 style="margin-top: 0;">Match Report Generated</h2>
+            <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">The text below is ready to be copied for social media updates and official match reports.</p>
+            <textarea id="report-output" style="width: 100%; height: 300px; font-family: monospace; font-size: 0.95em;"></textarea>
+            <div class="grid-2" style="margin-top: 20px;">
+                <button class="btn btn-blue" onclick="copyReport()" style="margin: 0;">📋 Copy Text to Clipboard</button>
+                <button class="btn btn-gray" onclick="document.getElementById('report-modal').classList.add('hidden')" style="margin: 0;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         SPECTATOR DISPLAY
+    =========================================== -->
+    <div id="spectator-display">
+        
+        <div id="view-split" class="layout-split hidden">
+            <div class="sidebar">
+                <div class="brand-header">
+                    <img src="348493327_203936199154311_6160881155196360915_n.jpg" class="dynamic-logo brand-logo" alt="Club Logo">
+                </div>
+                <div class="lb-section" id="disp-teams-container">
+                    <div class="lb-title" id="disp-team-title">Team Standings</div>
+                    <div class="lb-list" id="disp-team-list"></div>
+                </div>
+                <div class="lb-section" style="border-top: 2px solid #222;">
+                    <div class="lb-title">Rider Standings</div>
+                    <div class="lb-list" id="disp-rider-list"></div>
+                </div>
+            </div>
+
+            <div class="heat-container">
+                <div class="heat-header">
+                    <div class="heat-badge">LIVE</div>
+                    <div class="heat-title" id="disp-heat-num">HEAT 1</div>
+                    <div class="heat-status" id="disp-heat-status"></div>
+                </div>
+                
+                <div class="gates-grid">
+                    <script>
+                        for(let i=1; i<=4; i++) {
+                            document.write(`
+                            <div class="disp-gate g${i}" id="gate-${i}">
+                                <div class="disp-rider-info">
+                                    <div class="disp-gate-num" id="disp-g${i}-label"></div>
+                                    <div class="disp-rider-name" id="disp-g${i}-name">-</div>
+                                    <div class="disp-rider-team" id="disp-g${i}-team"></div>
+                                </div>
+                                <div class="disp-result-overlay" id="disp-g${i}-overlay">
+                                    <div class="score-box">
+                                        <span class="score-label">FINISH</span>
+                                        <span class="score-val pos-text" id="disp-g${i}-pos">-</span>
+                                    </div>
+                                    <div class="score-box">
+                                        <span class="score-label">PTS</span>
+                                        <span class="score-val" id="disp-g${i}-pts">0</span>
+                                    </div>
+                                    <div class="score-box">
+                                        <span class="score-label">TOTAL</span>
+                                        <span class="score-val total" id="disp-g${i}-total">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            `);
+                        }
+                    </script>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-roster" class="layout-full hidden">
+            <img src="348493327_203936199154311_6160881155196360915_n.jpg" alt="Logo" class="dynamic-logo dynamic-logo-full">
+            <div class="full-title">Riders</div>
+            <div class="full-container" id="disp-roster-grid"></div>
+        </div>
+
+        <div id="view-standings" class="layout-full hidden">
+            <img src="348493327_203936199154311_6160881155196360915_n.jpg" alt="Logo" class="dynamic-logo dynamic-logo-full">
+            <div class="full-title" id="disp-standings-title">Current Standings</div>
+            <div class="full-container" id="disp-standings-grid"></div>
+        </div>
+
+        <div id="view-schedule" class="layout-full hidden">
+            <img src="348493327_203936199154311_6160881155196360915_n.jpg" alt="Logo" class="dynamic-logo dynamic-logo-full">
+            <div class="full-title">Race Schedule</div>
+            <div class="schedule-grid-container" id="disp-schedule-grid"></div>
+        </div>
+
+    </div>
+
+    <!-- ==========================================
+         APPLICATION LOGIC
+    =========================================== -->
+    <script>
+        const STORAGE_KEY = 'speedwayProState';
+        const SETUP_SAVE_KEY = 'speedwaySavedSetup';
+        const isDisplayMode = new URLSearchParams(window.location.search).get('mode') === 'display';
+
+        const GATE_COLOURS = ['RED', 'BLUE', 'WHITE', 'YELLOW'];
+
+        let state = {
+            mode: 'team',
+            displayState: 'ROSTER',
+            currentHeatNum: 1,
+            teams: [],
+            riders: [],
+            formula: [], 
+            completedHeats: [], 
+            liveGates: [ 
+                { riderId: null, posText: '-', pts: 0 },
+                { riderId: null, posText: '-', pts: 0 },
+                { riderId: null, posText: '-', pts: 0 },
+                { riderId: null, posText: '-', pts: 0 }
+            ]
+        };
+
+        let gateInputs = [
+            { finishVal: null, penalty: 0 },
+            { finishVal: null, penalty: 0 },
+            { finishVal: null, penalty: 0 },
+            { finishVal: null, penalty: 0 }
+        ];
+
+        let teamCounter = 0;
+        let lastRenderedState = '';
+
+        // --- NETWORK LOGIC ---
+        let peer;
+        let remoteConnections = [];
+        const hostPeerId = "comets-" + Math.floor(Math.random() * 90000 + 10000);
+
+        function initNetwork() {
+            peer = new Peer(hostPeerId);
+            peer.on('open', (id) => { const codeEl = document.getElementById('my-peer-code'); if(codeEl) codeEl.textContent = id; });
+            peer.on('connection', (conn) => {
+                remoteConnections.push(conn);
+                const statEl = document.getElementById('peer-status');
+                if(statEl) { statEl.textContent = "✅ Remote Display Connected!"; statEl.style.color = "#38a169"; }
+                conn.on('open', () => conn.send(JSON.stringify(state)));
+                conn.on('close', () => { if(statEl) { statEl.textContent = "❌ Remote Display Disconnected"; statEl.style.color = "#e53e3e"; }});
+            });
+            peer.on('error', (err) => console.error("PeerJS Error:", err));
+        }
+
+        function connectAsRemote() {
+            const hostId = document.getElementById('remote-code-input').value.trim().toLowerCase();
+            if(!hostId) return alert("Please enter the connection code.");
+            
+            document.getElementById('setup-view').classList.add('hidden');
+            document.getElementById('spectator-display').style.display = 'block';
+            
+            if(peer) peer.destroy();
+            peer = new Peer(); 
+            peer.on('open', () => {
+                const conn = peer.connect(hostId);
+                conn.on('open', () => console.log("Connected to Announcer"));
+                conn.on('data', (data) => renderDisplay(JSON.parse(data)));
+                conn.on('close', () => alert("Lost connection to announcer."));
+            });
+            peer.on('error', () => { alert("Connection failed."); location.reload(); });
+        }
+
+        function generateId() { return Math.random().toString(36).substr(2, 9); }
+
+        function getOrdinal(n) {
+            let s = ["th", "st", "nd", "rd"];
+            let v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        }
+
+        function calculateStandings(stateObj) {
+            const riderScores = stateObj.riders.map(r => {
+                let gross = 0; let pens = 0;
+                stateObj.completedHeats.forEach(h => {
+                    const res = h.results.find(x => x.riderId === r.id);
+                    if (res) { gross += res.points; pens += (res.penalty || 0); }
+                });
+                const net = gross - pens;
+                const displayStr = pens > 0 ? `${gross} -${pens}` : `${net}`;
+                return { ...r, gross, pens, net, displayStr, total: net };
+            }).sort((a,b) => b.net - a.net);
+
+            // Tie break logic for riders
+            let rRank = 1;
+            for (let i = 0; i < riderScores.length; i++) {
+                if (i > 0 && riderScores[i].net < riderScores[i - 1].net) { rRank = i + 1; }
+                riderScores[i].rankStr = getOrdinal(rRank);
+            }
+
+            const teamScores = stateObj.teams.map(t => {
+                const tRiders = riderScores.filter(r => r.teamId === t.id);
+                const tTotal = tRiders.reduce((sum, r) => sum + r.net, 0);
+                return { ...t, total: tTotal };
+            }).sort((a,b) => b.total - a.total);
+
+            // Tie break logic for teams
+            let tRank = 1;
+            for (let i = 0; i < teamScores.length; i++) {
+                if (i > 0 && teamScores[i].total < teamScores[i - 1].total) { tRank = i + 1; }
+                teamScores[i].rankStr = getOrdinal(tRank);
+            }
+
+            return { riderScores, teamScores };
+        }
+
+        // --- BRANDING LOGIC ---
+        function applyBranding(mode) {
+            const root = document.documentElement;
+            const logos = document.querySelectorAll('.dynamic-logo');
+            
+            if (mode === 'mini_indiv') {
+                root.style.setProperty('--primary', '#d50000'); // Strong Racing Red
+                root.style.setProperty('--secondary', '#ffffff'); // Crisp White
+                logos.forEach(img => img.src = 'mini_speedway_logo.jpg'); 
+                
+                const setupPanel = document.getElementById('setup-main-panel');
+                if(setupPanel) setupPanel.style.borderTop = "5px solid #d50000";
+            } else {
+                root.style.setProperty('--primary', '#e74c3c'); // Comets Red
+                root.style.setProperty('--secondary', '#f1c40f'); // Comets Yellow
+                logos.forEach(img => img.src = '348493327_203936199154311_6160881155196360915_n.jpg');
+                
+                const setupPanel = document.getElementById('setup-main-panel');
+                if(setupPanel) setupPanel.style.borderTop = "none";
+            }
+        }
+
+        function toggleSetupMode() {
+            const mode = document.getElementById('setup-mode').value;
+            const isIndiv = ['indiv', 'mini_indiv'].includes(mode);
+            
+            if (isIndiv) {
+                document.getElementById('setup-teams-container').classList.add('hidden');
+                document.getElementById('setup-indiv-container').classList.remove('hidden');
+            } else {
+                document.getElementById('setup-teams-container').classList.remove('hidden');
+                document.getElementById('setup-indiv-container').classList.add('hidden');
+            }
+
+            applyBranding(mode);
+            updateControllerGateLabels(mode);
+        }
+
+        function updateControllerGateLabels(mode) {
+            for(let i=1; i<=4; i++) {
+                const el = document.getElementById(`ctrl-g${i}-title`);
+                if(el) {
+                    if (mode === 'mini_indiv') {
+                        el.textContent = `${GATE_COLOURS[i-1]} Gate`;
+                    } else if (mode === 'indiv') {
+                        el.textContent = `Gate ${i}`;
+                    } else {
+                        el.textContent = `Input ${i}`;
+                    }
+                }
+            }
+        }
+
+        function addTeamInput(defaultName = "", defaultRiders = "") {
+            teamCounter++;
+            const div = document.createElement('div');
+            div.className = 'team-setup-card';
+            div.innerHTML = `
+                <div style="display: flex; gap: 15px;">
+                    <div style="flex: 1;"><label>Team/Pair Name</label><input type="text" class="setup-t-name" value="${defaultName}" placeholder="e.g. Away Team"></div>
+                    <div style="flex: 2;"><label>Riders (One per line)</label><textarea class="setup-t-riders" placeholder="Rider 1\nRider 2">${defaultRiders}</textarea></div>
+                </div>
+            `;
+            document.getElementById('dynamic-teams-list').appendChild(div);
+        }
+
+        function getPreviewRiders() {
+            let riders = [];
+            let entryNum = 1;
+            const mode = document.getElementById('setup-mode').value;
+            if (['indiv', 'mini_indiv'].includes(mode)) {
+                const lines = document.getElementById('setup-indiv-riders').value.split('\n');
+                lines.forEach(name => {
+                    name = name.trim();
+                    if(name) riders.push({ entryNum: entryNum++, name: name });
+                });
+            } else {
+                const teamCards = document.querySelectorAll('.team-setup-card');
+                teamCards.forEach(card => {
+                    const lines = card.querySelector('.setup-t-riders').value.split('\n');
+                    lines.forEach(name => {
+                        name = name.trim();
+                        if(name) riders.push({ entryNum: entryNum++, name: name });
+                    });
+                });
+            }
+            return riders;
+        }
+
+        function refreshScheduleDropdowns() {
+            const riders = getPreviewRiders();
+            let options = '<option value="">-- Select --</option>';
+            riders.forEach(r => { options += `<option value="${r.entryNum}">${r.entryNum}. ${r.name}</option>`; });
+
+            document.querySelectorAll('.sch-select').forEach(sel => {
+                const currentVal = sel.value;
+                sel.innerHTML = options;
+                if(currentVal) sel.value = currentVal; 
+            });
+        }
+
+        function addScheduleHeat(presetVals = ["", "", "", ""]) {
+            const mode = document.getElementById('setup-mode').value;
+            const heatIndex = document.querySelectorAll('.sch-heat-row-setup').length + 1;
+            const row = document.createElement('div');
+            row.className = 'sch-heat-row-setup';
+            row.style = "display:flex; gap:10px; align-items:center;";
+            
+            let html = `<div style="font-weight:bold; width:60px; color:var(--primary);">Heat <span class="sch-heat-num">${heatIndex}</span></div>`;
+            const gateNames = mode === 'mini_indiv' ? GATE_COLOURS : ['Gate 1', 'Gate 2', 'Gate 3', 'Gate 4'];
+            
+            const riders = getPreviewRiders();
+            let options = '<option value="">-- Select --</option>';
+            riders.forEach(r => { options += `<option value="${r.entryNum}">${r.entryNum}. ${r.name}</option>`; });
+
+            for(let i=0; i<4; i++) {
+                html += `<div style="flex:1;"><label style="font-size:0.7em;">${gateNames[i]}</label><select class="sch-select gate-sel-${i}">${options}</select></div>`;
+            }
+            html += `<button class="btn btn-red" style="width:auto; padding:5px 10px; margin-top:15px;" onclick="this.parentElement.remove(); updateScheduleLabels();">X</button>`;
+            
+            row.innerHTML = html;
+            document.getElementById('schedule-builder-container').appendChild(row);
+
+            if(presetVals) {
+                for(let i=0; i<4; i++) {
+                    if(presetVals[i]) row.querySelector(`.gate-sel-${i}`).value = presetVals[i];
+                }
+            }
+        }
+
+        function updateScheduleLabels() {
+            document.querySelectorAll('.sch-heat-row-setup').forEach((row, idx) => {
+                row.querySelector('.sch-heat-num').textContent = idx + 1;
+            });
+        }
+
+        function saveSetup() {
+            const setupData = {
+                mode: document.getElementById('setup-mode').value,
+                indivRiders: document.getElementById('setup-indiv-riders').value,
+                formula: [],
+                teams: []
+            };
+            document.querySelectorAll('.team-setup-card').forEach(card => {
+                setupData.teams.push({
+                    name: card.querySelector('.setup-t-name').value,
+                    riders: card.querySelector('.setup-t-riders').value
+                });
+            });
+            document.querySelectorAll('.sch-heat-row-setup').forEach(row => {
+                let heatNums = [];
+                for(let i=0; i<4; i++) {
+                    const val = row.querySelector(`.gate-sel-${i}`).value;
+                    heatNums.push(val ? parseInt(val) : null);
+                }
+                setupData.formula.push(heatNums);
+            });
+
+            localStorage.setItem(SETUP_SAVE_KEY, JSON.stringify(setupData));
+            alert('Match setup saved successfully.');
+        }
+
+        function loadSetup() {
+            const dataStr = localStorage.getItem(SETUP_SAVE_KEY);
+            if(!dataStr) { alert('No saved setup found.'); return; }
+            const data = JSON.parse(dataStr);
+            document.getElementById('setup-mode').value = data.mode;
+            document.getElementById('setup-indiv-riders').value = data.indivRiders;
+            
+            document.getElementById('dynamic-teams-list').innerHTML = ''; 
+            if(data.teams && data.teams.length > 0) {
+                data.teams.forEach(t => addTeamInput(t.name, t.riders));
+            } else {
+                addTeamInput("", ""); addTeamInput("", "");
+            }
+            toggleSetupMode();
+            
+            document.getElementById('schedule-builder-container').innerHTML = '';
+            if(data.formula && data.formula.length > 0) {
+                data.formula.forEach(presetVals => addScheduleHeat(presetVals));
+            }
+        }
+
+        function initSetup() {
+            if(!isDisplayMode) {
+                initNetwork(); 
+                if(!localStorage.getItem(SETUP_SAVE_KEY)) { addTeamInput("", ""); addTeamInput("", ""); } 
+                else { loadSetup(); }
+                const currentUrl = window.location.href.split('?')[0];
+                document.getElementById('display-preview').src = currentUrl + '?mode=display';
+            }
+        }
+
+        function startMatch() {
+            state.mode = document.getElementById('setup-mode').value;
+            state.teams = [];
+            state.riders = [];
+            state.completedHeats = [];
+            state.formula = [];
+            let globalRiderNumber = 1;
+            
+            if (['indiv', 'mini_indiv'].includes(state.mode)) {
+                document.getElementById('setup-indiv-riders').value.split('\n').forEach(name => {
+                    name = name.trim();
+                    if(name) state.riders.push({ id: generateId(), name: name, teamId: null, entryNum: globalRiderNumber++ });
+                });
+            } else {
+                document.querySelectorAll('.team-setup-card').forEach(card => {
+                    const tName = card.querySelector('.setup-t-name').value.trim();
+                    const tRiders = card.querySelector('.setup-t-riders').value.split('\n');
+                    if (tName) {
+                        const tId = generateId();
+                        state.teams.push({ id: tId, name: tName });
+                        tRiders.forEach(name => {
+                            name = name.trim();
+                            if(name) state.riders.push({ id: generateId(), name: name, teamId: tId, entryNum: globalRiderNumber++ });
+                        });
+                    }
+                });
+            }
+
+            document.querySelectorAll('.sch-heat-row-setup').forEach(row => {
+                let heatNums = [];
+                for(let i=0; i<4; i++) {
+                    const val = row.querySelector(`.gate-sel-${i}`).value;
+                    heatNums.push(val ? parseInt(val) : null);
+                }
+                state.formula.push(heatNums);
+            });
+
+            populateDropdowns();
+            document.getElementById('setup-view').classList.add('hidden');
+            document.getElementById('match-view').classList.remove('hidden');
+            
+            document.getElementById('ctrl-heatNum').value = 1;
+            loadHeat(1);
+            
+            updateDisplayState('ROSTER');
+        }
+
+        function populateDropdowns() {
+            let options = `<option value="">-- Empty --</option>`;
+            if (['indiv', 'mini_indiv'].includes(state.mode)) {
+                state.riders.forEach(r => { options += `<option value="${r.id}">${r.entryNum}. ${r.name}</option>`; });
+            } else {
+                state.teams.forEach(team => {
+                    const tRiders = state.riders.filter(r => r.teamId === team.id);
+                    if(tRiders.length > 0) {
+                        options += `<optgroup label="${team.name}">`;
+                        tRiders.forEach(r => { options += `<option value="${r.id}">${r.entryNum}. ${r.name}</option>`; });
+                        options += `</optgroup>`;
+                    }
+                });
+            }
+            for(let i=1; i<=4; i++) { document.getElementById(`ctrl-g${i}-rider`).innerHTML = options; }
+        }
+
+        function setFinish(gate, val) { gateInputs[gate-1].finishVal = val; refreshGateUI(gate); }
+        function togglePenalty(gate) { gateInputs[gate-1].penalty = gateInputs[gate-1].penalty === 1 ? 0 : 1; refreshGateUI(gate); }
+
+        function refreshGateUI(gate) {
+            const data = gateInputs[gate-1];
+            document.querySelectorAll(`#gate-group-${gate} .f-btn`).forEach(b => {
+                b.className = 'f-btn'; 
+                if (data.finishVal && b.dataset.val === data.finishVal) {
+                    b.classList.add(`active-${data.finishVal.split('|')[1]}`);
+                }
+            });
+
+            const penBtn = document.getElementById(`ctrl-g${gate}-pen`);
+            if(data.penalty > 0) { penBtn.classList.add('active'); penBtn.textContent = '⚠️ Tapes Penalty APPLIED (-1 Pt)'; } 
+            else { penBtn.classList.remove('active'); penBtn.textContent = '⚠️ Add Tapes Penalty (-1 Pt)'; }
+        }
+
+        function changeHeat(delta) {
+            let num = parseInt(document.getElementById('ctrl-heatNum').value) + delta;
+            if(num < 1) num = 1;
+            document.getElementById('ctrl-heatNum').value = num;
+            loadHeat(num);
+        }
+
+        function loadHeat(heatNum) {
+            for(let i=1; i<=4; i++) {
+                document.getElementById(`ctrl-g${i}-rider`).value = "";
+                gateInputs[i-1] = { finishVal: null, penalty: 0 };
+                refreshGateUI(i);
+            }
+            
+            const historical = state.completedHeats.find(h => h.heatNum == heatNum);
+            if(historical) {
+                historical.results.forEach(res => {
+                    const riderSelect = document.getElementById(`ctrl-g${res.gate}-rider`);
+                    if(riderSelect) riderSelect.value = res.riderId;
+                    gateInputs[res.gate-1].finishVal = res.finishVal;
+                    gateInputs[res.gate-1].penalty = res.penalty || 0;
+                    refreshGateUI(res.gate);
+                });
+                document.getElementById('ctrl-status-badge').textContent = `EDITING PAST HEAT ${heatNum}`;
+                document.getElementById('ctrl-status-badge').style.background = '#e53e3e';
+            } 
+            else {
+                if(state.formula && state.formula[heatNum - 1]) {
+                    const prog = state.formula[heatNum - 1];
+                    for(let i=0; i<4; i++) {
+                        const eNum = prog[i];
+                        if(eNum && !isNaN(eNum)) {
+                            const rider = state.riders.find(r => r.entryNum === eNum);
+                            if(rider) document.getElementById(`ctrl-g${i+1}-rider`).value = rider.id;
+                        }
+                    }
+                }
+                document.getElementById('ctrl-status-badge').textContent = `READY TO PUSH HEAT ${heatNum}`;
+                document.getElementById('ctrl-status-badge').style.background = '#718096';
+            }
+        }
+
+        function pushMatchup() {
+            state.displayState = 'RACING';
+            state.currentHeatNum = parseInt(document.getElementById('ctrl-heatNum').value);
+            for(let i=1; i<=4; i++) {
+                state.liveGates[i-1].riderId = document.getElementById(`ctrl-g${i}-rider`).value;
+                state.liveGates[i-1].posText = '-';
+                state.liveGates[i-1].pts = 0;
+            }
+            broadcastState();
+            document.getElementById('ctrl-status-badge').textContent = `SPECTATORS SEEING: HEAT ${state.currentHeatNum} MATCHUP`;
+            document.getElementById('ctrl-status-badge').style.background = '#3182ce';
+        }
+
+        function commitAndShowResults() {
+            const currentHeatVal = parseInt(document.getElementById('ctrl-heatNum').value);
+            const heatData = { heatNum: currentHeatVal, results: [] };
+            for(let i=1; i<=4; i++) {
+                const rId = document.getElementById(`ctrl-g${i}-rider`).value;
+                const finishVal = gateInputs[i-1].finishVal; 
+                const penaltyVal = gateInputs[i-1].penalty;
+                
+                if (rId && finishVal) {
+                    const parts = finishVal.split('|');
+                    const pts = parseInt(parts[0]);
+                    const posTxt = parts[1];
+                    heatData.results.push({ gate: i, riderId: rId, points: pts, posText: posTxt, finishVal: finishVal, penalty: penaltyVal });
+                    state.liveGates[i-1].posText = posTxt;
+                    state.liveGates[i-1].pts = pts;
+                }
+            }
+            state.completedHeats = state.completedHeats.filter(h => h.heatNum !== currentHeatVal);
+            state.completedHeats.push(heatData);
+            state.currentHeatNum = currentHeatVal;
+            state.displayState = 'RESULTS';
+            broadcastState();
+            
+            document.getElementById('ctrl-status-badge').textContent = `SPECTATORS SEEING: HEAT ${state.currentHeatNum} RESULTS`;
+            document.getElementById('ctrl-status-badge').style.background = '#d69e2e';
+        }
+
+        function finishMatchAndReport() {
+            updateDisplayState('STANDINGS');
+            const standings = calculateStandings(state);
+            let report = `🏁 MATCH RESULT 🏁\n\n`;
+            
+            if (!['indiv', 'mini_indiv'].includes(state.mode)) {
+                report += `🏆 TEAM STANDINGS:\n`;
+                standings.teamScores.forEach(t => { report += `${t.rankStr} ${t.name}: ${t.total} pts\n`; });
+                report += `\n`;
+            }
+
+            report += `🏍️ RIDER SCORES:\n`;
+            if (['indiv', 'mini_indiv'].includes(state.mode)) {
+                standings.riderScores.forEach(r => { report += `${r.rankStr} ${r.name}: ${r.displayStr}\n`; });
+            } else {
+                state.teams.forEach(team => {
+                    report += `\n-- ${team.name} --\n`;
+                    standings.riderScores.filter(r => r.teamId === team.id).forEach(r => {
+                        report += `${r.name}: ${r.displayStr}\n`;
+                    });
+                });
+            }
+            document.getElementById('report-output').value = report;
+            document.getElementById('report-modal').classList.remove('hidden');
+        }
+
+        function copyReport() {
+            document.getElementById('report-output').select();
+            document.execCommand('copy');
+            alert('Match report copied to clipboard. Ready for social media!');
+        }
+
+        function resetMatch() {
+            if(confirm("WARNING: Are you sure you want to end this match? This will wipe all current scores and return you to the setup menu.")) {
+                document.getElementById('match-view').classList.add('hidden');
+                document.getElementById('setup-view').classList.remove('hidden');
+                state.displayState = 'WAITING';
+                state.completedHeats = [];
+                broadcastState();
+            }
+        }
+
+        function updateDisplayState(status) {
+            state.displayState = status;
+            broadcastState();
+            if(status === 'ROSTER') {
+                document.getElementById('ctrl-status-badge').textContent = `SPECTATORS SEEING: PRE-MATCH ROSTER`;
+                document.getElementById('ctrl-status-badge').style.background = '#805ad5';
+            } else if (status === 'STANDINGS') {
+                document.getElementById('ctrl-status-badge').textContent = `SPECTATORS SEEING: FULL STANDINGS`;
+                document.getElementById('ctrl-status-badge').style.background = '#805ad5';
+            } else if (status === 'SCHEDULE') {
+                document.getElementById('ctrl-status-badge').textContent = `SPECTATORS SEEING: SCHEDULE`;
+                document.getElementById('ctrl-status-badge').style.background = '#805ad5';
+            }
+        }
+
+        function broadcastState() {
+            const dataStr = JSON.stringify(state);
+            localStorage.setItem(STORAGE_KEY, dataStr);
+            try {
+                const iframe = document.getElementById('display-preview');
+                if(iframe && iframe.contentWindow) iframe.contentWindow.postMessage({ type: 'speedwayUpdate', data: dataStr }, '*');
+            } catch(e) {}
+            remoteConnections.forEach(conn => { if(conn.open) conn.send(dataStr); });
+        }
+
+        function openDisplayWindow() {
+            broadcastState();
+            window.open(window.location.href.split('?')[0] + '?mode=display', 'Spectator', 'width=1280,height=720');
+        }
+
+        // --- SPECTATOR DISPLAY LOGIC ---
+        function renderDisplay(stateObj) {
+            if(!stateObj) return;
+            applyBranding(stateObj.mode);
+
+            const viewSplit = document.getElementById('view-split');
+            const viewRoster = document.getElementById('view-roster');
+            const viewStandings = document.getElementById('view-standings');
+            const viewSchedule = document.getElementById('view-schedule');
+            
+            if (stateObj.displayState !== lastRenderedState) {
+                viewSplit.classList.remove('fade-slide-in');
+                viewRoster.classList.remove('fade-slide-in');
+                viewStandings.classList.remove('fade-slide-in');
+                viewSchedule.classList.remove('fade-slide-in');
+                void viewSplit.offsetWidth; 
+                
+                if (stateObj.displayState === 'ROSTER') viewRoster.classList.add('fade-slide-in');
+                else if (stateObj.displayState === 'STANDINGS') viewStandings.classList.add('fade-slide-in');
+                else if (stateObj.displayState === 'SCHEDULE') viewSchedule.classList.add('fade-slide-in');
+                else viewSplit.classList.add('fade-slide-in');
+            }
+            lastRenderedState = stateObj.displayState;
+
+            viewSplit.classList.add('hidden');
+            viewRoster.classList.add('hidden');
+            viewStandings.classList.add('hidden');
+            viewSchedule.classList.add('hidden');
+
+            const standings = calculateStandings(stateObj);
+            const riderScores = standings.riderScores;
+            const teamScores = standings.teamScores;
+
+            // -----------------------------------------
+            // VIEW: SCHEDULE 
+            // -----------------------------------------
+            if (stateObj.displayState === 'SCHEDULE') {
+                viewSchedule.classList.remove('hidden');
+                let html = '';
+                
+                if (stateObj.formula && stateObj.formula.length > 0) {
+                    const colors = ['#e74c3c', '#3498db', '#ecf0f1', '#f1c40f']; 
+                    
+                    for(let i = 0; i < stateObj.formula.length; i++) {
+                        const heatProg = stateObj.formula[i];
+                        const heatNum = i + 1;
+                        
+                        const completedData = stateObj.completedHeats.find(c => c.heatNum === heatNum);
+                        const completedClass = completedData ? 'heat-completed' : '';
+                        const badgeHtml = completedData ? `<div style="font-size: 1.2vh; margin-top: 5px; color: #aaa;">COMPLETED</div>` : '';
+                        
+                        html += `<div class="schedule-heat-row ${completedClass}">
+                                    <div class="schedule-num">
+                                        <div>HEAT ${heatNum}</div>
+                                        ${badgeHtml}
+                                    </div>
+                                    <div class="schedule-riders">`;
+                        
+                        for(let g=0; g<4; g++) {
+                            const entryNum = heatProg[g];
+                            const rider = stateObj.riders.find(r => r.entryNum === entryNum);
+                            const name = rider ? `${rider.entryNum}. ${rider.name}` : '-';
+                            
+                            let ptsHtml = '';
+                            if (completedData && rider) {
+                                const rRes = completedData.results.find(rInfo => rInfo.riderId === rider.id);
+                                if (rRes) { ptsHtml = `<div class="sch-pts">${rRes.points} PTS</div>`; }
+                            }
+
+                            html += `<div class="sch-r" style="color: ${colors[g]};">
+                                        <div>${name}</div>
+                                        ${ptsHtml}
+                                     </div>`;
+                        }
+                        html += `   </div>
+                                 </div>`;
+                    }
+                    
+                    const gridEl = document.getElementById('disp-schedule-grid');
+                    if (stateObj.formula.length > 14) { gridEl.style.gridTemplateColumns = '1fr 1fr 1fr'; } 
+                    else { gridEl.style.gridTemplateColumns = '1fr 1fr'; }
+                    
+                } else {
+                    html = `<div style="color: white; font-size: 3vh; width: 100%; text-align:center; grid-column: 1 / -1;">No race schedule was pre-programmed.</div>`;
+                }
+                
+                document.getElementById('disp-schedule-grid').innerHTML = html;
+                return;
+            }
+
+            // -----------------------------------------
+            // VIEW: ROSTER
+            // -----------------------------------------
+            if (stateObj.displayState === 'ROSTER') {
+                viewRoster.classList.remove('hidden');
+                let html = '';
+                if (['indiv', 'mini_indiv'].includes(stateObj.mode)) {
+                    html += `<div class="card-group" style="width: 100%;"><div class="card-title">Riders</div><div class="multi-col-grid cols-3">`;
+                    riderScores.forEach(r => { html += `<div class="card-row"><span class="card-row-name">${r.entryNum}. ${r.name}</span></div>`; });
+                    html += `</div></div>`;
+                } else {
+                    html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2vw; width: 100%;">`;
+                    stateObj.teams.forEach(team => {
+                        html += `<div class="card-group"><div class="card-title">${team.name || 'Team'}</div><div style="display: flex; flex-direction: column;">`;
+                        stateObj.riders.filter(r => r.teamId === team.id).forEach(r => { 
+                            html += `<div class="card-row"><span class="card-row-name">${r.entryNum}. ${r.name}</span></div>`; 
+                        });
+                        html += `</div></div>`;
+                    });
+                    html += `</div>`;
+                }
+                document.getElementById('disp-roster-grid').innerHTML = html;
+                return;
+            }
+
+            // -----------------------------------------
+            // VIEW: STANDINGS
+            // -----------------------------------------
+            if (stateObj.displayState === 'STANDINGS') {
+                viewStandings.classList.remove('hidden');
+                let html = '';
+                
+                if (!['indiv', 'mini_indiv'].includes(stateObj.mode)) {
+                    const tTitle = (stateObj.mode === 'pairs') ? 'Pairs Standings' : 'Team Standings';
+                    html += `<div class="card-group" style="flex: 1; max-width: 500px;"><div class="card-title">${tTitle}</div><div>`;
+                    teamScores.forEach(t => { 
+                        html += `<div class="card-row"><span class="card-row-name" style="font-weight: bold;"><span style="color: var(--secondary); width: 3vw; display: inline-block;">${t.rankStr}</span> ${t.name}</span><span class="card-row-score" style="font-weight: bold;">${t.total}</span></div>`; 
+                    });
+                    html += `</div></div>`;
+                }
+                
+                html += `<div class="card-group" style="flex: 2;"><div class="card-title">Rider Standings</div>
+                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 4vw;">`;
+                
+                const top16 = riderScores.slice(0, 16);
+                const col1 = top16.slice(0, 8);
+                const col2 = top16.slice(8, 16);
+                
+                html += `<div style="display:flex; flex-direction:column;">`;
+                col1.forEach(r => { 
+                    html += `<div class="card-row"><span class="card-row-name"><span style="color: var(--secondary); width: 3vw; display: inline-block;">${r.rankStr}</span> ${r.name}</span><span class="card-row-score">${r.displayStr}</span></div>`; 
+                });
+                html += `</div><div style="display:flex; flex-direction:column;">`;
+                col2.forEach(r => { 
+                    html += `<div class="card-row"><span class="card-row-name"><span style="color: var(--secondary); width: 3vw; display: inline-block;">${r.rankStr}</span> ${r.name}</span><span class="card-row-score">${r.displayStr}</span></div>`; 
+                });
+                html += `</div></div></div>`;
+                
+                document.getElementById('disp-standings-grid').innerHTML = html;
+                return;
+            }
+
+            // -----------------------------------------
+            // VIEW: SPLIT SCREEN
+            // -----------------------------------------
+            viewSplit.classList.remove('hidden');
+
+            const tContainer = document.getElementById('disp-teams-container');
+            if (['indiv', 'mini_indiv'].includes(stateObj.mode)) { tContainer.style.display = 'none'; } 
+            else {
+                tContainer.style.display = 'flex';
+                document.getElementById('disp-team-title').textContent = (stateObj.mode === 'pairs') ? 'Pairs Standings' : 'Team Standings';
+                let tHtml = '';
+                teamScores.forEach(t => { tHtml += `<div class="lb-item"><span>${t.name}</span><span class="lb-score">${t.total}</span></div>`; });
+                document.getElementById('disp-team-list').innerHTML = tHtml;
+            }
+
+            let rHtml = '';
+            // Display up to 16 riders in the live sidebar now
+            riderScores.slice(0, 16).forEach(r => {
+                let suffix = '';
+                if ((stateObj.mode === 'team' || stateObj.mode === 'fours') && r.teamId) {
+                    const team = stateObj.teams.find(t => t.id === r.teamId);
+                    if(team) suffix = `<span style="font-size: 0.6em; color: #888;"> (${team.name.substring(0,4)})</span>`;
+                }
+                rHtml += `<div class="lb-item"><span><span style="color: var(--secondary); display: inline-block; width: 1.8vw; font-size: 0.9em;">${r.rankStr}</span> ${r.name}${suffix}</span><span class="lb-score">${r.displayStr}</span></div>`;
+            });
+            document.getElementById('disp-rider-list').innerHTML = rHtml;
+
+            document.getElementById('disp-heat-num').textContent = `HEAT ${stateObj.currentHeatNum}`;
+            if (stateObj.displayState === 'RACING') { document.getElementById('disp-heat-status').textContent = ''; } 
+            else if (stateObj.displayState === 'RESULTS') { document.getElementById('disp-heat-status').textContent = 'FINAL RESULTS'; }
+
+            const showStandardGateNumbers = (stateObj.mode === 'indiv'); 
+            const showMiniGateColours = (stateObj.mode === 'mini_indiv');
+            
+            for(let i=0; i<4; i++) {
+                const gateEl = document.getElementById(`gate-${i+1}`);
+                if (!gateEl) continue; 
+
+                const gData = stateObj.liveGates[i];
+                const rider = riderScores.find(r => r.id === gData.riderId); 
+                
+                const gateLabelEl = document.getElementById(`disp-g${i+1}-label`);
+                if (gateLabelEl) { 
+                    if(showMiniGateColours) {
+                        const bgClass = ['gate-badge-red', 'gate-badge-blue', 'gate-badge-white', 'gate-badge-yellow'][i];
+                        gateLabelEl.innerHTML = `<span class="gate-badge ${bgClass}">${GATE_COLOURS[i]}</span>`;
+                    } else if (showStandardGateNumbers) {
+                        gateLabelEl.innerHTML = `GATE ${i+1}`;
+                    } else {
+                        gateLabelEl.innerHTML = '';
+                    }
+                }
+                
+                gateEl.classList.remove('show-results', 'winner');
+                const overlayEl = document.getElementById(`disp-g${i+1}-overlay`);
+                if (overlayEl) { overlayEl.classList.remove('flip-in'); void overlayEl.offsetWidth; }
+
+                if (rider) {
+                    const team = stateObj.teams.find(t => t.id === rider.teamId);
+                    document.getElementById(`disp-g${i+1}-name`).textContent = `${rider.entryNum}. ${rider.name}`;
+                    document.getElementById(`disp-g${i+1}-team`).textContent = team ? team.name : '';
+                    
+                    if (stateObj.displayState === 'RESULTS') {
+                        gateEl.classList.add('show-results');
+                        if (overlayEl) overlayEl.classList.add('flip-in');
+
+                        document.getElementById(`disp-g${i+1}-pos`).textContent = gData.posText;
+                        document.getElementById(`disp-g${i+1}-pts`).textContent = gData.pts;
+                        document.getElementById(`disp-g${i+1}-total`).textContent = rider.displayStr;
+
+                        if (gData.posText === '1st' || gData.pts === 4) { gateEl.classList.add('winner'); }
+                    }
+                } else {
+                    document.getElementById(`disp-g${i+1}-name`).textContent = '-';
+                    document.getElementById(`disp-g${i+1}-team`).textContent = '';
+                }
+            }
+        }
+
+        if (isDisplayMode) {
+            document.getElementById('setup-view').style.display = 'none';
+            document.getElementById('match-view').style.display = 'none';
+            document.getElementById('spectator-display').style.display = 'block';
+            
+            window.addEventListener('storage', function(e) { if (e.key === STORAGE_KEY) renderDisplay(JSON.parse(e.newValue)); });
+            window.addEventListener('message', function(e) { if(e.data && e.data.type === 'speedwayUpdate') renderDisplay(JSON.parse(e.data.data)); });
+
+            const initialData = localStorage.getItem(STORAGE_KEY);
+            if (initialData) renderDisplay(JSON.parse(initialData));
+        } else {
+            initSetup();
+        }
+    </script>
+</body>
+</html>
