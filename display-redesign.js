@@ -33,7 +33,7 @@
   @media(max-width:1100px){.bsx-schedule-grid{grid-template-columns:repeat(3,1fr)}.bsx-stand-grid{grid-template-columns:1fr}.bsx-tr{font-size:1.8vh}}
   `;
 
-  function addCss() { const s=document.createElement('style'); s.textContent=css; document.head.appendChild(s); }
+  function addCss() { if(document.getElementById('bsx-style')) return; const s=document.createElement('style'); s.id='bsx-style'; s.textContent=css; document.head.appendChild(s); }
   function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function teamName(state,id){return id ? ((state.teams||[]).find(t=>t.id===id)?.name||'') : '';}
   function rider(state,id){return (state.riders||[]).find(r=>r.id===id);}
@@ -48,20 +48,20 @@
   function hideAll(){['bsx-results','bsx-standings','bsx-schedule'].forEach(id=>document.getElementById(id)?.classList.add('bsx-hidden'));}
   function renderResults(state){
     const heat=Number(state.currentHeatNum||1), data=(state.completedHeats||[]).find(h=>Number(h.heatNum)===heat); if(!data)return;
-    const rows=(data.results||[]).map(x=>({...x,r:rider(state,x.riderId)})).filter(x=>x.r).sort((a,b)=>{const order=v=>({'1ST':1,'2ND':2,'3RD':3,'4TH':4,'EX':5,'DNF':6})[String(v).toUpperCase()]||99;return order(a.posText)-order(b.posText);});
+    const rows=(data.results||[]).map(x=>({...x,r:rider(state,x.riderId)})).filter(x=>x.r).sort((a,b)=>{const order=v=>({'1ST':1,'2ND':2,'3RD':3,'4TH':4,'EX':5,'DNF':6})[String(v.posText).toUpperCase()]||99;return order(a.posText)-order(b.posText);});
     const totals=standings(state), byId=new Map(totals.map(x=>[x.id,x]));
-    document.getElementById('bsx-results').innerHTML=`<div class="bsx-title">HEAT ${heat} RESULT</div><div class="bsx-sub">Race results and championship points</div><div class="bsx-result-list">${rows.map((x,i)=>{const t=byId.get(x.r.id);return `<div class="bsx-result-row ${i===0?'first':''}"><div class="bsx-result-pos">${i+1===1?'🥇':i+1===2?'🥈':i+1===3?'🥉':'4️⃣'}</div><div class="bsx-result-num">#${esc(x.r.entryNum)}</div><div>${esc(x.r.name)}<div style="font-size:1.45vh;color:#8fa2b0;font-weight:700">${esc(teamName(state,x.r.teamId))}</div></div><div class="bsx-result-pts">${Number(x.points||0)} pts</div><div class="bsx-result-total">${t?.total??0} total</div></div>`}).join('')}</div><div class="bsx-podium">Next: Heat ${Math.min(heat+1,state.formula?.length||heat)}</div>`;
+    document.getElementById('bsx-results').innerHTML=`<div class="bsx-title">HEAT ${heat} RESULT</div><div class="bsx-sub">Race results and championship points</div><div class="bsx-result-list">${rows.map((x,i)=>{const t=byId.get(x.r.id);return `<div class="bsx-result-row ${i===0?'first':''}"><div class="bsx-result-pos">${i===0?'🥇':i===1?'🥈':i===2?'🥉':'4️⃣'}</div><div class="bsx-result-num">#${esc(x.r.entryNum)}</div><div>${esc(x.r.name)}<div style="font-size:1.45vh;color:#8fa2b0;font-weight:700">${esc(teamName(state,x.r.teamId))}</div></div><div class="bsx-result-pts">${Number(x.points||0)} pts</div><div class="bsx-result-total">${t?.total??0} total</div></div>`}).join('')}</div><div class="bsx-podium">Next: Heat ${Math.min(heat+1,state.formula?.length||heat)}</div>`;
   }
   function renderStandings(state){
     const rows=standings(state), mid=Math.ceil(rows.length/2), chunks=[rows.slice(0,mid),rows.slice(mid)];
-    document.getElementById('bsx-standings').innerHTML=`<div class="bsx-title">CURRENT STANDINGS</div><div class="bsx-sub">Mini Speedway GP • points after heat ${Number(state.currentHeatNum||1)}</div><div class="bsx-stand-grid">${chunks.map(chunk=>`<div class="bsx-table"><div class="bsx-th"><div>#</div><div>RIDER</div><div></div><div>RACES</div><div>TOTAL</div></div>${chunk.map(r=>{const n=nextRide(state,r);return `<div class="bsx-tr"><div class="rank">${r.rank}</div><div class="num">#${esc(r.entryNum)}</div><div><div>${esc(r.name)}</div><div class="next">Next race: ${n?`Heat ${n}`:'—'}</div></div><div>${r.races} ${r.races===1?'race':'races'} completed</div><div class="total">${r.total}</div></div>`}).join('')}</div>`).join('')}</div><div class="bsx-note">1st = 4 pts • 2nd = 3 pts • 3rd = 2 pts • 4th = 1 pt</div>`;
+    document.getElementById('bsx-standings').innerHTML=`<div class="bsx-title">CURRENT STANDINGS</div><div class="bsx-sub">Mini Speedway GP • points after heat ${Number(state.currentHeatNum||1)}</div><div class="bsx-stand-grid">${chunks.map(chunk=>`<div class="bsx-table"><div class="bsx-th"><div>#</div><div>NO.</div><div>RIDER</div><div>RACES</div><div>TOTAL</div></div>${chunk.map(r=>{const n=nextRide(state,r);return `<div class="bsx-tr"><div class="rank">${r.rank}</div><div class="num">#${esc(r.entryNum)}</div><div><div>${esc(r.name)}</div><div class="next">Next race: ${n?`Heat ${n}`:'—'}</div></div><div>${r.races} ${r.races===1?'race':'races'} completed</div><div class="total">${r.total}</div></div>`}).join('')}</div>`).join('')}</div><div class="bsx-note">1st = 4 pts • 2nd = 3 pts • 3rd = 2 pts • 4th = 1 pt</div>`;
   }
   function renderSchedule(state){
     const total=state.formula?.length||0, current=Number(state.currentHeatNum||1), start=Math.max(1,current-2), end=Math.min(total,start+15), heats=[];for(let h=start;h<=end;h++)heats.push(h);
     document.getElementById('bsx-schedule').innerHTML=`<div class="bsx-title">RACE SCHEDULE</div><div class="bsx-sub">Heats ${start}–${end} of ${total}</div><div class="bsx-schedule-grid">${heats.map(h=>{const rs=formulaRiders(state,h), cls=h===current?' current':'';return `<div class="bsx-heat${cls}"><h3>HEAT ${h}</h3><div class="state">${h<current?'Completed':h===current?'Current':'Upcoming'}</div>${rs.map((r,i)=>`<div class="bsx-rider ${GATE_CLASS[i]}"><span class="gate">${GATES[i]}</span>#${esc(r.entryNum)} ${esc(r.name)}</div>`).join('')}</div>`}).join('')}</div>`;
   }
   function apply(state){
-    if(!state || !window.isDisplayMode)return;
+    if(!state || !state.__displayMode)return;
     ensureHosts(); hideAll();
     if(state.displayState==='RESULTS'){renderResults(state);document.getElementById('bsx-results').classList.remove('bsx-hidden');}
     else if(state.displayState==='STANDINGS'){renderStandings(state);document.getElementById('bsx-standings').classList.remove('bsx-hidden');}
@@ -70,7 +70,12 @@
   function patch(){
     if(typeof window.renderDisplay!=='function'){setTimeout(patch,250);return;}
     const original=window.renderDisplay;
-    window.renderDisplay=function(state){ original(state); apply(state); };
+    window.renderDisplay=function(state){
+      state = state || {};
+      state.__displayMode = true;
+      original(state);
+      apply(state);
+    };
     addCss(); ensureHosts();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',patch); else patch();
