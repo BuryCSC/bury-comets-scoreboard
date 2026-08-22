@@ -1,8 +1,9 @@
 /* Bury CSC spectator display redesign
  * Works from the existing spectator DOM in index.html.
+ * The controller/state logic is not changed.
  */
 (function(){'use strict';
-const STYLE_ID='bury-csc-spectator-redesign-v2';
+const STYLE_ID='bury-csc-spectator-redesign-v3';
 const css=`
 #spectator-display.bsx-redesign-active{background:#071018!important;color:#fff!important}
 #spectator-display.bsx-redesign-full .sidebar{display:none!important}
@@ -28,9 +29,10 @@ const css=`
 @media(max-width:1100px){#spectator-display.bsx-redesign-schedule .multi-col-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
 `;
 function addStyle(){if(document.getElementById(STYLE_ID))return;const s=document.createElement('style');s.id=STYLE_ID;s.textContent=css;document.head.appendChild(s)}
-function text(el){return(el?.textContent||'').replace(/\s+/g,' ').trim().toUpperCase()}
-function detectPage(){const root=document.getElementById('spectator-display');if(!root||getComputedStyle(root).display==='none')return null;const t=text(root);if(/RESULT|RACE RESULTS|HEAT .* RESULT/.test(t))return'results';if(/SCHEDULE|PROGRAMME|UPCOMING HEATS/.test(t))return'schedule';if(/STANDINGS|LEADERBOARD|CHAMPIONSHIP/.test(t))return'standings';return null}
-function apply(){const root=document.getElementById('spectator-display');if(!root)return;root.classList.remove('bsx-redesign-active','bsx-redesign-full','bsx-redesign-results','bsx-redesign-standings','bsx-redesign-schedule');const page=detectPage();if(page){root.classList.add('bsx-redesign-active','bsx-redesign-full','bsx-redesign-'+page);root.innerHTML=root.innerHTML.replace(/rides completed/gi,'races completed')}}
-function start(){addStyle();apply();const root=document.getElementById('spectator-display');if(root)new MutationObserver(()=>apply()).observe(root,{subtree:true,childList:true,characterData:true,attributes:true});setInterval(apply,1000)}
+function visible(el){if(!el)return false;const r=el.getBoundingClientRect(),cs=getComputedStyle(el);return cs.display!=='none'&&cs.visibility!=='hidden'&&r.width>0&&r.height>0}
+function detectPage(){const root=document.getElementById('spectator-display');if(!root||!visible(root))return null;const titles=[...root.querySelectorAll('.full-title')].filter(visible).map(e=>(e.textContent||'').replace(/\s+/g,' ').trim().toUpperCase()).join(' | ');if(/RESULT/.test(titles))return'results';if(/SCHEDULE|PROGRAMME/.test(titles))return'schedule';if(/STANDINGS|LEADERBOARD|CHAMPIONSHIP/.test(titles))return'standings';return null}
+function replaceTerminology(root){const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);const nodes=[];let n;while(n=walker.nextNode())nodes.push(n);for(const node of nodes){if(node.nodeValue&&/rides completed/i.test(node.nodeValue))node.nodeValue=node.nodeValue.replace(/rides completed/gi,'races completed')}}
+function apply(){const root=document.getElementById('spectator-display');if(!root)return;root.classList.remove('bsx-redesign-active','bsx-redesign-full','bsx-redesign-results','bsx-redesign-standings','bsx-redesign-schedule');const page=detectPage();if(page){root.classList.add('bsx-redesign-active','bsx-redesign-full','bsx-redesign-'+page);replaceTerminology(root)}}
+function start(){addStyle();apply();const root=document.getElementById('spectator-display');if(root)new MutationObserver(()=>{if(!window.__bsxApplying){window.__bsxApplying=true;try{apply()}finally{window.__bsxApplying=false}}}).observe(root,{subtree:true,childList:true,characterData:true,attributes:true});setInterval(apply,1000)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
